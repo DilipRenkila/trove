@@ -129,6 +129,89 @@ class Backup(object):
                                _create_resources)
 
     @classmethod
+    def create_automatic_backup(cls, context, instance, name, store_backup_for, description=None,
+               parent_id=None, incremental=False):
+        """
+        create db record for Backup
+        :param cls:
+        :param context: tenant_id included
+        :param instance:
+        :param name:
+        :param description:
+        :param parent_id:
+        :param incremental: flag to indicate incremental backup
+        :param store_backup_for: How many days to store daily backup
+        based on previous backup
+        :return:
+        """
+
+        def _create_resources():
+            # parse the ID from the Ref
+            instance_id = utils.get_id_from_href(instance)
+
+            # verify that the instance exists and can perform actions
+            from trove.instance.models import Instance
+            instance_model = Instance.load(context, instance_id)
+            instance_model.validate_can_perform_action()
+            cls.validate_can_perform_action(
+                instance_model, 'backup_create')
+            cls.verify_swift_auth_token(context)
+            if instance_model.cluster_id is not None:
+                raise exception.ClusterInstanceOperationNotSupported()
+
+            ds = instance_model.datastore
+            ds_version = instance_model.datastore_version
+            parent = None
+            last_backup_id = None
+            if parent_id:
+                # Look up the parent info or fail early if not found or if
+                # the user does not have access to the parent.
+                _parent = cls.get_by_id(context, parent_id)
+                parent = {
+                    'location': _parent.location,
+                    'checksum': _parent.checksum,
+                }
+            elif incremental:
+                _parent = Backup.get_last_completed(context, instance_id)
+                if _parent:
+                    parent = {
+                        'location': _parent.location,
+                        'checksum': _parent.checksum
+                    }
+                    last_backup_id = _parent.id
+            try:
+                db_info = DBBackup.create_automatic_backup(name=name,
+                                          description=description,
+                                          tenant_id=context.tenant,
+                                          state=BackupState.NEW,
+                                          store_backup_for= 14,
+                                          instance_id=instance_id,
+                                          parent_id=parent_id or last_backup_id,
+                                          datastore_version_id=ds_version.id,
+                                          deleted=False)
+            except exception.InvalidModelError as ex:
+                LOG.exception("Unable to create backup record for "
+                              "instance: %s", instance_id)
+                raise exception.BackupCreationError(str(ex))
+
+            backup_info = {'id': db_info.id,
+                           'name': name,
+                           'description': description,
+                           'instance_id': instance_id,
+                           'store_backup_for': 14,
+                           'backup_type': db_info.backup_type,
+                           'checksum': db_info.checksum,
+                           'parent': parent,
+                           'datastore': ds.name,
+                           'datastore_version': ds_version.name,
+                           }
+            api.API(context).create_backup(backup_info, instance_id)
+            return db_info
+        return run_with_quotas(context.tenant,
+                               {'backups': 1},
+                               _create_resources)
+
+    @classmethod
     def running(cls, instance_id, exclude=None):
         """
         Returns the first running backup for instance_id
@@ -300,7 +383,7 @@ def persisted_models():
 class DBBackup(DatabaseModelBase):
     """A table for Backup records."""
     _data_fields = ['id', 'name', 'description', 'location', 'backup_type',
-                    'size', 'tenant_id', 'state', 'instance_id',
+                    'size', 'tenant_id', 'state', 'instance_id','store_backup_for',
                     'checksum', 'backup_timestamp', 'deleted', 'created',
                     'updated', 'deleted_at', 'parent_id',
                     'datastore_version_id']

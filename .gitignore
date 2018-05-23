@@ -48,3 +48,6 @@ publish-docs/
 
 # Policy sample
 etc/trove/policy.yaml.sample
+
+# ide files
+.idea/

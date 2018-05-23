@@ -44,6 +44,20 @@ class DatabaseModelBase(models.ModelBase):
             raise exception.InvalidModelError(errors=instance.errors)
         return instance.save()
 
+    @classmethod
+    def create_automatic_backup(cls, **values):
+        init_vals = {
+            'id': utils.generate_uuid(),
+            'created': timeutils.utcnow(),
+        }
+        if hasattr(cls, 'deleted'):
+            init_vals['deleted'] = False
+        init_vals.update(values)
+        instance = cls(**init_vals)
+        if not instance.is_valid():
+            raise exception.InvalidModelError(errors=instance.errors)
+        return instance.save()
+
     @property
     def db_api(self):
         return get_db_api()
