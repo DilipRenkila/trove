@@ -512,9 +512,11 @@ class PgSqlApp(object):
             "SELECT pg_start_backup('%s', true)" % backup_label)
         return r[0][0]
 
-    def pg_xlogfile_name(self, start_segment):
+# for postgres version above 10 , use pg_walfile_name to convert wal logs to a file
+
+    def pg_walfile_name(self, start_segment):
         r = self.build_admin().query(
-            "SELECT pg_xlogfile_name('%s')" % start_segment)
+            "SELECT pg_walfile_name('%s')" % start_segment)
         return r[0][0]
 
     def pg_stop_backup(self):

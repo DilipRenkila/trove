@@ -232,7 +232,7 @@ class PgBaseBackupIncremental(PgBaseBackup):
         self.backup_label = self.base_filename
         self.start_segment = self.app.pg_start_backup(self.backup_label)
 
-        self.start_wal_file = self.app.pg_xlogfile_name(self.start_segment)
+        self.start_wal_file = self.app.pg_walfile_name(self.start_segment)
 
         self.stop_segment = self.app.pg_stop_backup()
 
